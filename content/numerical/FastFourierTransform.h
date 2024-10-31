@@ -1,58 +1,100 @@
-/**
- * Author: Ludo Pulles, chilli, Simon Lindholm
- * Date: 2019-01-09
- * License: CC0
- * Source: http://neerc.ifmo.ru/trains/toulouse/2017/fft2.pdf (do read, it's excellent)
-   Accuracy bound from http://www.daemonology.net/papers/fft.pdf
- * Description: fft(a) computes $\hat f(k) = \sum_x a[x] \exp(2\pi i \cdot k x / N)$ for all $k$. N must be a power of 2.
-   Useful for convolution:
-   \texttt{conv(a, b) = c}, where $c[x] = \sum a[i]b[x-i]$.
-   For convolution of complex numbers or more than two vectors: FFT, multiply
-   pointwise, divide by n, reverse(start+1, end), FFT back.
-   Rounding is safe if $(\sum a_i^2 + \sum b_i^2)\log_2{N} < 9\cdot10^{14}$
-   (in practice $10^{16}$; higher for random inputs).
-   Otherwise, use NTT/FFTMod.
- * Time: O(N \log N) with $N = |A|+|B|$ ($\tilde 1s$ for $N=2^{22}$)
- * Status: somewhat tested
- * Details: An in-depth examination of precision for both FFT and FFTMod can be found
- * here (https://github.com/simonlindholm/fft-precision/blob/master/fft-precision.md)
- */
-#pragma once
-
 typedef complex<double> C;
 typedef vector<double> vd;
+const long double PI = acos(-1.0L);
+
 void fft(vector<C>& a) {
-	int n = sz(a), L = 31 - __builtin_clz(n);
+	int n = a.size(), L = 31 - __builtin_clz(n);
 	static vector<complex<long double>> R(2, 1);
-	static vector<C> rt(2, 1);  // (^ 10% faster if double)
+	static vector<C> rt(2, 1);
 	for (static int k = 2; k < n; k *= 2) {
 		R.resize(n); rt.resize(n);
-		auto x = polar(1.0L, acos(-1.0L) / k);
-		rep(i,k,2*k) rt[i] = R[i] = i&1 ? R[i/2] * x : R[i/2];
+		auto x = polar(1.0L, PI / k);
+		for (int i = k; i < 2*k; ++i) rt[i] = R[i] = i&1 ? R[i/2] * x : R[i/2];
 	}
-	vi rev(n);
-	rep(i,0,n) rev[i] = (rev[i / 2] | (i & 1) << L) / 2;
-	rep(i,0,n) if (i < rev[i]) swap(a[i], a[rev[i]]);
+	vector<int> rev(n);
+	for (int i = 0; i < n; ++i) rev[i] = (rev[i / 2] | (i & 1) << L) / 2;
+	for (int i = 0; i < n; ++i) if (i < rev[i]) swap(a[i], a[rev[i]]);
 	for (int k = 1; k < n; k *= 2)
-		for (int i = 0; i < n; i += 2 * k) rep(j,0,k) {
-			// C z = rt[j+k] * a[i+j+k]; // (25% faster if hand-rolled)  /// include-line
-			auto x = (double *)&rt[j+k], y = (double *)&a[i+j+k];        /// exclude-line
-			C z(x[0]*y[0] - x[1]*y[1], x[0]*y[1] + x[1]*y[0]);           /// exclude-line
+		for (int i = 0; i < n; i += 2 * k) for (int j = 0; j < k; ++j) {
+			C z = rt[j+k] * a[i+j+k];
 			a[i + j + k] = a[i + j] - z;
 			a[i + j] += z;
 		}
 }
+
+void ifft(vector<C>& x){
+	for(auto& elem : x) elem = conj(elem);
+    fft(x);
+    for(auto& elem : x)
+		(elem = conj(elem)) /= x.size();
+}
+
 vd conv(const vd& a, const vd& b) {
 	if (a.empty() || b.empty()) return {};
-	vd res(sz(a) + sz(b) - 1);
-	int L = 32 - __builtin_clz(sz(res)), n = 1 << L;
+	vd res(a.size() + b.size() - 1);
+	int L = 32 - __builtin_clz(res.size()), n = 1 << L;
 	vector<C> in(n), out(n);
-	copy(all(a), begin(in));
-	rep(i,0,sz(b)) in[i].imag(b[i]);
+	copy(a.begin(), a.end(), begin(in));
+	for (int i = 0; i < b.size(); ++i) in[i].imag(b[i]);
 	fft(in);
 	for (C& x : in) x *= x;
-	rep(i,0,n) out[i] = in[-i & (n - 1)] - conj(in[i]);
+	for (int i = 0; i < n; ++i) out[i] = in[-i & (n - 1)] - conj(in[i]);
 	fft(out);
-	rep(i,0,sz(res)) res[i] = imag(out[i]) / (4 * n);
+	for (int i = 0; i < res.size(); ++i) res[i] = imag(out[i]) / (4 * n);
 	return res;
+}
+
+// Returns an array of \sum_{j=0}^{m-1}(P[j] - T[i + j])^2
+// where m is the length of s2
+vector<int> stringMatch(string& s1, string& s2){
+    long long i, j, cur, val;
+    vd a(s1.length()), b(s2.length()), temp;
+    for (j = 0; j < s1.length(); ++j)
+        a[j] = s1[j] - 'a' + 1;
+    val = 0;
+    for (j = 0; j < s2.length(); ++j){
+        b[j] = s2[s2.length()-1-j] - 'a' + 1;
+        val += b[j]*b[j];
+    }
+    temp = conv(a, b);
+
+    cur = 0;
+    vector<int> ans;
+    for (i = 0; i < s2.length(); ++i)
+        cur += a[i]*a[i];
+    ans.push_back(val + cur - 2*(long long)round(temp[i-1]));
+    for ( ; i < s1.length(); ++i){
+        cur -= a[i-s2.length()]*a[i-s2.length()];
+        cur += a[i]*a[i];
+        ans.push_back(val + cur - 2*(long long)round(temp[i]));
+    }
+    return ans;
+}
+
+// Returns an array of \sum_{j=0}^{m-1}P[j]T[i+j](P[j] - T[i + j])^2
+// where m is the length of w
+vector<int> stringMatchWildcard(string& t, string& w, char c = '?'){
+    long long i, temp;
+    vd t1(t.size()), t2(t.size()), t3(t.size());
+    for (i = 0; i < t.size(); ++i){
+        t1[i] = (t[i]!=c) * (t[i]-'a'+1);
+        t2[i] = t1[i] * t1[i];
+        t3[i] = t2[i] * t1[i];
+    }
+    vd w1(w.size()), w2(w.size()), w3(w.size());
+    for (i = 0; i < w.size(); ++i){
+        w1[i] = (w[w.size()-1-i]!=c) * (w[w.size()-1-i]-'a'+1);
+        w2[i] = w1[i] * w1[i];
+        w3[i] = w2[i] * w1[i];
+    }
+
+    vd t1w3 = conv(t1, w3);
+    vd t2w2 = conv(t2, w2);
+    vd t3w1 = conv(t3, w1);
+    vector<int> ans;
+    for (i = w.size()-1; i < t.size(); ++i){
+        temp = (long long)round(t1w3[i]) - 2*(long long)round(t2w2[i]) + (long long)round(t3w1[i]);
+        ans.push_back(temp);
+    }
+    return ans;
 }
