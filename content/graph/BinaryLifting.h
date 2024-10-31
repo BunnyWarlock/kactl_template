@@ -1,38 +1,33 @@
-/**
- * Author: Johan Sannemo
- * Date: 2015-02-06
- * License: CC0
- * Source: Folklore
- * Description: Calculate power of two jumps in a tree,
- * to support fast upward jumps and LCAs.
- * Assumes the root node points to itself.
- * Time: construction $O(N \log N)$, queries $O(\log N)$
- * Status: Tested at Petrozavodsk, also stress-tested via LCA.cpp
- */
-#pragma once
+const int MAX = 1010;
+const int LOG = 10;
+vector<int> g[MAX];
+int parent[MAX][LOG], depth[MAX], k; // k = 33 - __builtin_clz(n);
 
-vector<vi> treeJump(vi& P){
-	int on = 1, d = 1;
-	while(on < sz(P)) on *= 2, d++;
-	vector<vi> jmp(d, P);
-	rep(i,1,d) rep(j,0,sz(P))
-		jmp[i][j] = jmp[i-1][jmp[i-1][j]];
-	return jmp;
+void dfs(int s, int p = 0){
+  parent[s][0] = p;
+  for (int i = 1; i < k; ++i)
+    parent[s][i] = parent[parent[s][i-1]][i-1];
+
+  for (auto& x: g[s])
+    if (x != p){
+      depth[x] = depth[s]+1;
+      dfs(x, s);
+    }
 }
 
-int jmp(vector<vi>& tbl, int nod, int steps){
-	rep(i,0,sz(tbl))
-		if(steps&(1<<i)) nod = tbl[i][nod];
-	return nod;
+int jump(int n, int x){
+  for (int i = 0; i < k; ++i)
+    if ((x>>i)&1) n = parent[n][i];
+  return n;
 }
 
-int lca(vector<vi>& tbl, vi& depth, int a, int b) {
-	if (depth[a] < depth[b]) swap(a, b);
-	a = jmp(tbl, a, depth[a] - depth[b]);
+int lca(int a, int b){
+  if (depth[a] < depth[b]) swap(a, b);
+	a = jump(a, depth[a] - depth[b]);
 	if (a == b) return a;
-	for (int i = sz(tbl); i--;) {
-		int c = tbl[i][a], d = tbl[i][b];
-		if (c != d) a = c, b = d;
-	}
-	return tbl[0][a];
+  for (int i = k-1; i >= 0; --i){
+    int c = parent[a][i], d = parent[b][i];
+    if (c != d) a = c, b = d;
+  }
+  return parent[a][0];
 }
