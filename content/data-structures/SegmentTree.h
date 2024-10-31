@@ -1,31 +1,72 @@
-/**
- * Author: Lucian Bicsi
- * Date: 2017-10-31
- * License: CC0
- * Source: folklore
- * Description: Zero-indexed max-tree. Bounds are inclusive to the left and exclusive to the right.
- * Can be changed by modifying T, f and unit.
- * Time: O(\log N)
- * Status: stress-tested
- */
-#pragma once
+namespace segmentTree{
+    template <class T>
+    struct SEGtree{
+        vector<T> arr;
+        size_t N;
+        T (*combine)(T, T);
+        T temp;
 
-struct Tree {
-	typedef int T;
-	static constexpr T unit = INT_MIN;
-	T f(T a, T b) { return max(a, b); } // (any associative fn)
-	vector<T> s; int n;
-	Tree(int n = 0, T def = unit) : s(2*n, def), n(n) {}
-	void update(int pos, T val) {
-		for (s[pos += n] = val; pos /= 2;)
-			s[pos] = f(s[pos * 2], s[pos * 2 + 1]);
-	}
-	T query(int b, int e) { // query [b, e)
-		T ra = unit, rb = unit;
-		for (b += n, e += n; b < e; b /= 2, e /= 2) {
-			if (b % 2) ra = f(ra, s[b++]);
-			if (e % 2) rb = f(s[--e], rb);
-		}
-		return f(ra, rb);
-	}
-};
+        void build(T a[], int v, int tl, int tr){
+            if (tl == tr){
+                arr[v] = a[tl];
+                return;
+            }
+            int tm = (tl + tr) / 2;
+            build(a, v+1, tl, tm);
+            build(a, v+2*(tm-tl+1), tm+1, tr);
+            arr[v] = combine(arr[v+1], arr[v+2*(tm-tl+1)]);
+        }
+        SEGtree(T a[], int n, T (*f)(T, T), T val){
+            N = n;
+            arr.resize(2*N-1);
+            combine = f;
+            temp = val;
+            build(a, 0, 0, N-1);
+        }
+
+        T query(int v, int tl, int tr, int l, int r){
+            if (l > tr || r < tl)
+                return temp;
+            if (l <= tl && r >= tr)
+                return arr[v];
+            int tm = (tl + tr) / 2;
+            return combine(query(v+1, tl, tm, l, r),
+                   query(v+2*(tm-tl+1), tm+1, tr, l, r));
+        }
+        T query(int l, int r){
+            return query(0, 0, N-1, l, r);
+        }
+
+        void update(int v, int tl, int tr, int pos, T new_val){
+            if (tl == tr){
+                arr[v] = new_val;
+                return;
+            }
+            int tm = (tl + tr) / 2;
+            if (pos <= tm) update(v+1, tl, tm, pos, new_val);
+            else update(v+2*(tm-tl+1), tm+1, tr, pos, new_val);
+            arr[v] = combine(arr[v+1], arr[v+2*(tm-tl+1)]);
+        }
+        void update(int pos, T new_val){
+            update(0, 0, N-1, pos, new_val);
+        }
+
+
+        // An example of how to do other stuff with segment trees using recursion
+        int lower_bound(int v, int tl, int tr, T k) {
+            if (k > arr[v])
+                return -1;
+            if (tl == tr)
+                return tl;
+            int tm = (tl + tr) / 2;
+            if (arr[v+1] >= k)
+                return lower_bound(v+1, tl, tm, k);
+            else
+                return lower_bound(v+2*(tm-tl+1), tm+1, tr, k-arr[v+1]);
+        }
+        int lower_bound(T k){
+          return lower_bound(0, 0, N-1, k);
+        }
+    };
+}
+using namespace segmentTree;
