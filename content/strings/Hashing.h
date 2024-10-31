@@ -1,54 +1,100 @@
-/**
- * Author: Simon Lindholm
- * Date: 2015-03-15
- * License: CC0
- * Source: own work
- * Description: Self-explanatory methods for string hashing.
- * Status: stress-tested
- */
-#pragma once
-
-// Arithmetic mod 2^64-1. 2x slower than mod 2^64 and more
-// code, but works on evil test data (e.g. Thue-Morse, where
-// ABBA... and BAAB... of length 2^10 hash the same mod 2^64).
-// "typedef ull H;" instead if you think test data is random,
-// or work mod 10^9+7 if the Birthday paradox is not a problem.
 typedef uint64_t ull;
-struct H {
-	ull x; H(ull x=0) : x(x) {}
-	H operator+(H o) { return x + o.x + (x + o.x < x); }
-	H operator-(H o) { return *this + ~o.x; }
-	H operator*(H o) { auto m = (__uint128_t)x * o.x;
-		return H((ull)m) + (ull)(m >> 64); }
-	ull get() const { return x + !~x; }
-	bool operator==(H o) const { return get() == o.get(); }
-	bool operator<(H o) const { return get() < o.get(); }
+static int C; // initialized below
+
+// Arithmetic mod two primes and 2^32 simultaneously.
+// "typedef uint64_t H;" instead if Thue-Morse does not apply.
+template<int M, class B>
+struct A {
+	int x; B b; A(int x = 0): x(x), b(x) {}
+	A(int x, B b): x(x), b(b) {}
+	A operator+(A o){ int y = x+o.x; return{ y - (y>=M)*M, b+o.b }; }
+	A operator-(A o){ int y = x-o.x; return{ y + (y< 0)*M, b-o.b }; }
+	A operator*(A o) { return { (int)(1LL*x*o.x % M), b*o.b }; }
+	explicit operator ull() { return x ^ (ull) b << 21; }
+	bool operator==(A o) const { return (ull)*this == (ull)o; }
+	bool operator<(A o) const { return (ull)*this < (ull)o; }
 };
-static const H C = (ll)1e11+3; // (order ~ 3e9; random also ok)
+typedef A<1000000007, A<1000000009, unsigned>> H;
+// typedef A<1000000007, unsigned> H; // Use this for single hashing
+
+vector<H> pw;
+void updatePW(int s){
+    while(pw.size() <= s)
+        pw.push_back(pw.back() * C);
+}
 
 struct HashInterval {
-	vector<H> ha, pw;
-	HashInterval(string& str) : ha(sz(str)+1), pw(ha) {
-		pw[0] = 1;
-		rep(i,0,sz(str))
-			ha[i+1] = ha[i] * C + str[i],
-			pw[i+1] = pw[i] * C;
+	vector<H> ha;
+    HashInterval(){}
+	HashInterval(string& str) : ha(str.size()+1){
+        updatePW(str.size());
+		for (int i = 0; i < str.size(); ++i)
+			ha[i+1] = ha[i] * C + str[i];
 	}
 	H hashInterval(int a, int b) { // hash [a, b)
 		return ha[b] - ha[a] * pw[b - a];
 	}
 };
 
+// Get hash of all substring in str of a specific length
 vector<H> getHashes(string& str, int length) {
-	if (sz(str) < length) return {};
-	H h = 0, pw = 1;
-	rep(i,0,length)
-		h = h * C + str[i], pw = pw * C;
+    updatePW(length);
+	if (str.size() < length) return {};
+	H h = 0;
+	for (int i = 0; i < length; ++i)
+		h = h * C + str[i];
 	vector<H> ret = {h};
-	rep(i,length,sz(str)) {
-		ret.push_back(h = h * C + str[i] - pw * str[i-length]);
-	}
+	for (int i = length; i < str.size(); ++i)
+		ret.push_back(h = h * C + str[i] - pw[length] * str[i-length]);
 	return ret;
 }
 
-H hashString(string& s){H h{}; for(char c:s) h=h*C+c;return h;}
+H hashString(string& s){
+	H h{};
+	for(char c: s)
+		h = h*C + c;
+	return h;
+}
+
+void init(){
+	timeval tp;
+	gettimeofday(&tp, 0);
+	C = (int)tp.tv_usec; // (less than modulo)
+	// assert((ull)(H(1)*2+1-3) == 0);
+
+    pw.push_back(1);
+}
+
+H concatHash(H str1, H str2, int len2){
+    updatePW(len2);
+    return str1*pw[len2] + str2;
+}
+
+void pointUpdateHash(H& a, string& s, char c, int i){
+    updatePW(s.size());
+    a = a + pw[s.size()-1-i]*(c-s[i]);
+}
+
+vector<int> robinKarp(string text, string pattern){
+	vector<int> ind;
+	vector<H> hashes = getHashes(text, pattern.size());
+	ull h = (ull)hashString(pattern);
+	for (int i = 0; i < hashes.size(); ++i)
+		if ((ull)hashes[i] == h)
+			ind.push_back(i);
+	return ind;
+}
+
+struct PalindromeHash{
+    HashInterval f, r;
+    int n;
+    PalindromeHash(string str): f(str), n(str.size()){
+        reverse(str.begin(), str.end());
+        r = HashInterval(str);
+    }
+    H HashF(int a, int b){ return f.hashInterval(a, b); } // hash [a, b)
+    H HashR(int a, int b){ return r.hashInterval(n-b, n-a); } // hash [a, b)
+    bool isPalindrome(int a, int b){ // checks [a, b)
+        return (ull)HashF(a, b) == (ull)HashR(a, b);
+    }
+};
