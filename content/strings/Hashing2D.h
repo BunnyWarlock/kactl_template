@@ -1,3 +1,14 @@
+/**
+ * Author: Stjepan Glavina
+ * License: Unlicense
+ * Source: https://github.com/stjepang/snippets/blob/master/min_rotation.cpp
+ * Description: Finds the lexicographically smallest rotation of a string.
+ * Time: O(N)
+ * Usage:
+ *  rotate(v.begin(), v.begin()+minRotation(v), v.end());
+ * Status: Stress-tested
+ */
+
 typedef uint64_t ull;
 static int C1, C2; // initialized below
 

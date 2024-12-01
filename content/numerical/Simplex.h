@@ -1,3 +1,12 @@
+/**
+ * Author: Per Austrin
+ * Date: 2004-02-08
+ * License: CC0
+ * Description: Finds the real roots to a polynomial.
+ * Usage: polyRoots({{2,-3,1}},-1e9,1e9) // solve x^2-3x+2 = 0
+ * Time: O(n^2 \log(1/\epsilon))
+ */
+
 // Author: Stanford
 // Solves a general linear maximization problem.
 // The input is taken in the standard form for linear programs.
