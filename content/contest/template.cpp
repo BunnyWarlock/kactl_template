@@ -15,4 +15,5 @@ template <class ...Args> auto &print(const Args &...args)
 
 int main() {
 	cin.tie(0)->sync_with_stdio(0);
-	cin.exceptions(cin.failbit); }
+	cin.exceptions(cin.failbit); 
+	srand(chrono::steady_clock::now().time_since_epoch().count());}
